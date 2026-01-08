@@ -752,9 +752,35 @@ async function loadLeaderboard() {
 
 async function submitScore() {
   if (!won.value) return;
+
+  // compute final score (you already do this)
+  const score = finalScore.value;
+
+  // If embedded inside Illusion Arc, send SCORE to the host instead of using /api/submit of blink-maze
+  if (isEmbedded()) {
+    sendScoreToHost({
+      type: "SCORE",
+      score,
+      // optional extra data (won’t break your host listener)
+      gameSlug: "blink-maze",
+      meta: {
+        mode: mode.value,
+        seed: seedKey.value,
+        timeMs: finalTimeMs.value,
+        blinks: finalBlinks.value,
+        moves: finalMoves.value,
+        invalidMoves: finalInvalid.value,
+      }
+    });
+
+    toast("Submitted to Illusion Arc 🏆", "ok", 1200);
+    rankMsg.value = "Saved to Illusion Arc leaderboard ✅";
+    return;
+  }
+
+  // otherwise keep your existing standalone behaviour on vercel:
   submitting.value = true;
   rankMsg.value = "";
-
   try {
     const payload = {
       mode: mode.value,
@@ -786,6 +812,7 @@ async function submitScore() {
   }
 }
 
+
 async function copyShareLink() {
   writeQuery();
   const link = new URL(window.location.href).toString();
@@ -797,6 +824,16 @@ async function copyShareLink() {
     toast("Copy failed. Use address bar.", "warn", 1200);
   }
 }
+
+function isEmbedded() {
+  try { return window.self !== window.top } catch { return true }
+}
+
+function sendScoreToHost(payload: any) {
+  // send to wrapper (parent). Wrapper will relay to IllusionArc.
+  window.parent.postMessage(payload, "*")
+}
+
 
 // ======= Mode change =======
 watch(mode, async () => {
