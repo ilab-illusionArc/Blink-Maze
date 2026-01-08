@@ -10,187 +10,56 @@
   >
     <canvas ref="canvas" class="canvas"></canvas>
 
-    <!-- ===== MOBILE HUD (compact) ===== -->
-    <div
-      v-if="isTouch"
-      class="hudMobile"
-      :class="{ peek: uiPeekWhileBlink }"
-      @pointerdown.stop
-      @pointerup.stop
-      @pointermove.stop
-      @pointercancel.stop
-    >
-      <div class="mTop">
-        <div class="mTitle">Blink Maze</div>
-        <div class="mTags">
-          <span class="tag">{{ modeLabel }}</span>
-          <span class="tag">{{ seedKey }}</span>
-        </div>
-      </div>
+    <!-- ===== STATS OVERLAY (always visible; not blocking) ===== -->
+<div class="statsOverlay" aria-hidden="true">
+  <div class="statsRow">
+    <span class="statPill">⭐ {{ scoreNow }}</span>
+    <span class="statPill">⏱ {{ (elapsedMs / 1000).toFixed(0) }}s</span>
+    <span class="statPill">⚡ {{ blinksUsed }}</span>
+    <span class="statPill">❌ {{ invalidMoves }}</span>
+  </div>
+</div>
 
-      <div class="mActions">
-        <button class="mBtn2 primary" :disabled="cooldownMsLeft > 0 || won" @click="blink">
-          Blink
-          <span class="sub">{{ cooldownMsLeft > 0 ? `${(cooldownMsLeft / 1000).toFixed(1)}s` : "ready" }}</span>
-        </button>
+<!-- ===== TOAST (always visible) ===== -->
+<div v-if="toastMsg" class="toastOverlay">
+  <div class="toast" :class="toastType">{{ toastMsg }}</div>
+</div>
 
-        <button class="mBtn2" @click="restart">↻</button>
-        <button class="mBtn2" @click="openLeaderboard">🏆</button>
-        <button class="mBtn2" @click="copyShareLink">⤴</button>
-        <button class="mBtn2" @click="openSettings">⚙</button>
-      </div>
+<!-- ===== DESKTOP CONTROLS (always visible) ===== -->
+<div v-if="!isTouch" class="controlsHud desktop">
+  <button class="cBtn primary" :disabled="cooldownMsLeft > 0 || won" @click="blink">
+    Blink
+    <span class="sub">{{ cooldownMsLeft > 0 ? `${(cooldownMsLeft / 1000).toFixed(1)}s` : "ready" }}</span>
+  </button>
+  <button class="cBtn" @click="restart">↻ Restart</button>
+</div>
 
-      <div class="mStats">
-        <span class="chip">⏱ {{ (elapsedMs / 1000).toFixed(0) }}s</span>
-        <span class="chip">⭐ {{ scoreNow }}</span>
-        <span class="chip">⚡ {{ blinksUsed }}</span>
-        <span class="chip">❌ {{ invalidMoves }}</span>
-      </div>
+<!-- ===== MOBILE CONTROLS: D-PAD (always visible) ===== -->
+<div
+  v-else
+  class="controlsHud mobile"
+  @pointerdown.stop
+  @pointerup.stop
+  @pointermove.stop
+  @pointercancel.stop
+>
+  <button class="mMini" @click="restart">↻</button>
 
-      <div v-if="toastMsg" class="toast" :class="toastType">{{ toastMsg }}</div>
+  <div class="pad">
+    <button class="mBtn" @click="tryMove(0,-1)">▲</button>
+
+    <div class="mRow">
+      <button class="mBtn" @click="tryMove(-1,0)">◀</button>
+      <button class="mBtn blink" :disabled="cooldownMsLeft > 0 || won" @click="blink">
+        BLINK
+      </button>
+      <button class="mBtn" @click="tryMove(1,0)">▶</button>
     </div>
 
-    <!-- ===== DESKTOP HUD (full) ===== -->
-    <div
-      v-else
-      class="hud"
-      @pointerdown.stop
-      @pointerup.stop
-      @pointermove.stop
-      @pointercancel.stop
-    >
-      <div class="titleRow">
-        <div class="title">Blink Maze</div>
-        <div class="badge">{{ modeLabel }} • {{ seedKey }}</div>
-      </div>
+    <button class="mBtn" @click="tryMove(0,1)">▼</button>
+  </div>
+</div>
 
-      <div class="hint">Desktop: WASD / Arrow • Blink: Space</div>
-
-      <div class="row">
-        <button class="btn primary" :disabled="cooldownMsLeft > 0 || won" @click="blink">
-          Blink <span class="sub">{{ cooldownMsLeft > 0 ? `${(cooldownMsLeft / 1000).toFixed(1)}s` : "ready" }}</span>
-        </button>
-        <button class="btn" @click="restart">Restart</button>
-        <button class="btn" @click="copyShareLink">Share</button>
-        <button class="btn" @click="openLeaderboard">Leaderboard</button>
-      </div>
-
-      <div class="row modeRow">
-        <label class="pill">
-          <input type="radio" value="daily" v-model="mode" />
-          <span>Daily</span>
-        </label>
-        <label class="pill">
-          <input type="radio" value="random" v-model="mode" />
-          <span>Random</span>
-        </label>
-        <input class="name" v-model="playerName" maxlength="18" placeholder="Name" />
-      </div>
-
-      <div class="stats">
-        <div class="stat"><span>Time</span><b>{{ (elapsedMs / 1000).toFixed(0) }}s</b></div>
-        <div class="stat"><span>Blinks</span><b>{{ blinksUsed }}</b></div>
-        <div class="stat"><span>Moves</span><b>{{ movesUsed }}</b></div>
-        <div class="stat"><span>Invalid</span><b>{{ invalidMoves }}</b></div>
-        <div class="stat score"><span>Score</span><b>{{ scoreNow }}</b></div>
-      </div>
-
-      <div v-if="toastMsg" class="toast" :class="toastType">{{ toastMsg }}</div>
-
-      <div v-if="!hasStarted && !won" class="startHint">Move or Blink to start</div>
-
-      <div v-if="won" class="winBox">
-        <div class="winTitle">✅ Escaped!</div>
-        <div class="winMeta">
-          <span><b>{{ finalScore }}</b> pts</span>
-          <span>{{ (finalTimeMs / 1000).toFixed(1) }}s</span>
-          <span>{{ finalBlinks }} blinks</span>
-          <span>{{ finalMoves }} moves</span>
-          <span>{{ finalInvalid }} invalid</span>
-        </div>
-
-        <div class="row">
-          <button class="btn primary" :disabled="submitting" @click="submitScore">
-            {{ submitting ? "Submitting..." : "Submit" }}
-          </button>
-          <button class="btn" @click="restart">Play Again</button>
-        </div>
-
-        <div v-if="rankMsg" class="rankBox">{{ rankMsg }}</div>
-      </div>
-    </div>
-
-    <!-- ===== MOBILE D-PAD (kept, but compact HUD now doesn’t block maze much) ===== -->
-    <div
-      v-if="isTouch"
-      class="mobileControls"
-      :class="{ peek: uiPeekWhileBlink }"
-      @pointerdown.stop
-      @pointerup.stop
-      @pointermove.stop
-      @pointercancel.stop
-    >
-      <button class="mBtn" @click="tryMove(0,-1)">▲</button>
-      <div class="mRow">
-        <button class="mBtn" @click="tryMove(-1,0)">◀</button>
-        <button class="mBtn blink" :disabled="cooldownMsLeft > 0 || won" @click="blink">BLINK</button>
-        <button class="mBtn" @click="tryMove(1,0)">▶</button>
-      </div>
-      <button class="mBtn" @click="tryMove(0,1)">▼</button>
-    </div>
-
-    <!-- ===== LEADERBOARD MODAL ===== -->
-    <div v-if="showLeaderboard" class="modalOverlay" @pointerdown="closeLeaderboard">
-      <div class="modal" @pointerdown.stop>
-        <div class="modalHead">
-          <div>
-            <div class="modalTitle">🏆 Leaderboard</div>
-            <div class="modalSub">{{ modeLabel }} • Seed: {{ seedKey }}</div>
-          </div>
-          <button class="xBtn" @click="closeLeaderboard">✕</button>
-        </div>
-
-        <div v-if="lbLoading" class="lbLoading">Loading…</div>
-        <ol v-else class="lbList">
-          <li v-for="(r, i) in leaderboard" :key="i" class="lbRow">
-            <span class="rank">#{{ i + 1 }}</span>
-            <span class="nameRow">{{ r.name }}</span>
-            <span class="scoreRow">{{ r.score }}</span>
-            <span class="small">{{ (r.time_ms / 1000).toFixed(1) }}s</span>
-          </li>
-          <li v-if="leaderboard.length === 0" class="lbEmpty">No scores yet. Be the first!</li>
-        </ol>
-      </div>
-    </div>
-
-    <!-- ===== SETTINGS MODAL (mobile) ===== -->
-    <div v-if="showSettings" class="modalOverlay" @pointerdown="closeSettings">
-      <div class="modal" @pointerdown.stop>
-        <div class="modalHead">
-          <div>
-            <div class="modalTitle">⚙ Settings</div>
-            <div class="modalSub">Mode + name</div>
-          </div>
-          <button class="xBtn" @click="closeSettings">✕</button>
-        </div>
-
-        <div class="settingsBlock">
-          <div class="settingsRow">
-            <label class="pill">
-              <input type="radio" value="daily" v-model="mode" />
-              <span>Daily</span>
-            </label>
-            <label class="pill">
-              <input type="radio" value="random" v-model="mode" />
-              <span>Random</span>
-            </label>
-          </div>
-
-          <input class="name wide" v-model="playerName" maxlength="18" placeholder="Name" />
-          <button class="btn primary wide" @click="closeSettings">Done</button>
-        </div>
-      </div>
-    </div>
 
     <!-- Focus overlay for desktop -->
     <div v-if="!hasFocus && !isTouch" class="focusOverlay" @pointerdown="focusGame">
@@ -199,12 +68,12 @@
   </div>
 </template>
 
+
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, computed, watch } from "vue";
+import { onMounted, onBeforeUnmount, ref, computed } from "vue";
 
 type Cell = { x: number; y: number };
 type MazeCell = { n: boolean; e: boolean; s: boolean; w: boolean; visited: boolean };
-type LbRow = { name: string; score: number; time_ms: number; blinks: number; moves: number; invalid_moves?: number; created_at: number };
 
 const root = ref<HTMLDivElement | null>(null);
 const canvas = ref<HTMLCanvasElement | null>(null);
@@ -228,24 +97,6 @@ const isTouch = ref(false);
 
 let ctx: CanvasRenderingContext2D | null = null;
 let raf = 0;
-
-// ======= Modal state =======
-const showLeaderboard = ref(false);
-const showSettings = ref(false);
-
-function openLeaderboard() {
-  showLeaderboard.value = true;
-  void loadLeaderboard();
-}
-function closeLeaderboard() {
-  showLeaderboard.value = false;
-}
-function openSettings() {
-  showSettings.value = true;
-}
-function closeSettings() {
-  showSettings.value = false;
-}
 
 // ======= Stars background =======
 type Star = { x: number; y: number; r: number; s: number; a: number };
@@ -274,37 +125,18 @@ function toast(msg: string, type: "info" | "warn" | "ok" = "info", ms = 900) {
   toastTimer = window.setTimeout(() => (toastMsg.value = ""), ms);
 }
 
-// ======= Mode + seed =======
-const mode = ref<"daily" | "random">("daily");
-const playerName = ref("Guest");
-
-function todayKeyLocal() {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-const dailyKey = ref(todayKeyLocal());
+// ======= Seed (RANDOM ONLY) =======
 const randomSeed = ref(Math.floor(Math.random() * 1e9));
+const seedKey = computed(() => String(randomSeed.value));
 
-const seedKey = computed(() => (mode.value === "daily" ? dailyKey.value : String(randomSeed.value)));
-const modeLabel = computed(() => (mode.value === "daily" ? "Daily" : "Random"));
-
-function readQuery() {
+// Optional: keep seed in URL (no share button, but preserves on refresh)
+function readSeedFromQuery() {
   const url = new URL(window.location.href);
-  const m = url.searchParams.get("mode");
   const s = url.searchParams.get("seed");
-
-  if (m === "random" || m === "daily") mode.value = m;
-  if (s && s.length <= 32) {
-    if (mode.value === "daily") dailyKey.value = s;
-    else randomSeed.value = /^\d+$/.test(s) ? Number(s) : Math.floor(Math.random() * 1e9);
-  }
+  if (s && /^\d+$/.test(s) && s.length <= 12) randomSeed.value = Number(s);
 }
-function writeQuery() {
+function writeSeedToQuery() {
   const url = new URL(window.location.href);
-  url.searchParams.set("mode", mode.value);
   url.searchParams.set("seed", seedKey.value);
   window.history.replaceState({}, "", url.toString());
 }
@@ -327,10 +159,10 @@ function startRunIfNeeded() {
   runStartedAt.value = Date.now();
 }
 
-// ✅ FIX: cooldown depends on nowMs (reactive)
+// cooldown depends on nowMs (reactive)
 const cooldownMsLeft = computed(() => Math.max(0, cooldownUntil.value - nowMs.value));
 
-// ======= Score (matches your server constants) =======
+// ======= Score =======
 const SCORE_BASE = 6000;
 const TIME_PENALTY_PER_SEC = 10;
 const MOVE_PENALTY = 4;
@@ -384,17 +216,7 @@ function cellAt(x: number, y: number): MazeCell {
 const player = ref<Cell>({ x: 0, y: 0 });
 const goal = ref<Cell>({ x: GRID_W - 1, y: GRID_H - 1 });
 
-function hashStringToInt(s: string) {
-  let h = 2166136261;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
-
-function generateMazeFromSeedKey(key: string) {
-  const seed = /^\d+$/.test(key) ? Number(key) : hashStringToInt(key);
+function generateMazeFromSeed(seed: number) {
   generateMaze(seed);
 }
 
@@ -472,7 +294,8 @@ function generateMaze(seed = Math.floor(Math.random() * 1e9)) {
   hasStarted.value = false;
   runStartedAt.value = 0;
 
-  rankMsg.value = "";
+  sentMsg.value = "";
+  sentOnce.value = false;
 }
 
 // ======= Movement =======
@@ -493,6 +316,35 @@ function failMove() {
   invalidMoves.value++;
   toast("Blocked!", "warn", 450);
   if (navigator.vibrate) navigator.vibrate(22);
+}
+
+const sentOnce = ref(false);
+const sentMsg = ref("");
+
+function sendScoreToHost(payload: any) {
+  // main website (parent iframe) should listen for this
+  window.parent.postMessage(payload, "*");
+}
+
+function autoSendWinScore() {
+  if (sentOnce.value) return;
+  sentOnce.value = true;
+
+  sendScoreToHost({
+    type: "SCORE",
+    gameSlug: "blink-maze",
+    score: finalScore.value,
+    meta: {
+      seed: seedKey.value,
+      timeMs: finalTimeMs.value,
+      blinks: finalBlinks.value,
+      moves: finalMoves.value,
+      invalidMoves: finalInvalid.value,
+    },
+  });
+
+  toast("Score sent to main site 🏆", "ok", 1200);
+  sentMsg.value = "Saved on main website ✅";
 }
 
 function tryMove(dx: number, dy: number) {
@@ -519,7 +371,7 @@ function tryMove(dx: number, dy: number) {
     finalInvalid.value = invalidMoves.value;
     finalScore.value = computeScore(finalTimeMs.value, finalBlinks.value, finalMoves.value, finalInvalid.value);
 
-    toast("Escaped! Submit your score 🏆", "ok", 1200);
+    autoSendWinScore();
   }
 }
 
@@ -539,9 +391,9 @@ function blink() {
 
 // ======= UI =======
 function restart() {
-  if (mode.value === "random") randomSeed.value = Math.floor(Math.random() * 1e9);
-  writeQuery();
-  generateMazeFromSeedKey(seedKey.value);
+  randomSeed.value = Math.floor(Math.random() * 1e9);
+  writeSeedToQuery();
+  generateMazeFromSeed(randomSeed.value);
   toast("Restarted", "info", 650);
 }
 
@@ -570,7 +422,7 @@ function handleKey(e: KeyboardEvent) {
 // ======= Touch (swipe/tap gameplay) =======
 function isFromHud(e: PointerEvent) {
   const el = e.target as HTMLElement | null;
-  return !!el?.closest?.(".hud") || !!el?.closest?.(".hudMobile") || !!el?.closest?.(".mobileControls") || !!el?.closest?.(".modalOverlay");
+  return !!el?.closest?.(".hud") || !!el?.closest?.(".hudMobile") || !!el?.closest?.(".mobileControls");
 }
 
 let pointerActive = false;
@@ -730,119 +582,6 @@ function loop() {
   raf = requestAnimationFrame(loop);
 }
 
-// ======= Leaderboard + submit =======
-const leaderboard = ref<LbRow[]>([]);
-const lbLoading = ref(false);
-const submitting = ref(false);
-const rankMsg = ref("");
-
-async function loadLeaderboard() {
-  lbLoading.value = true;
-  try {
-    const res = await $fetch<{ ok: boolean; rows?: LbRow[] }>(`/api/leaderboard`, {
-      query: { mode: mode.value, seed: seedKey.value, limit: 20 },
-    });
-    leaderboard.value = res.ok && res.rows ? res.rows : [];
-  } catch {
-    leaderboard.value = [];
-  } finally {
-    lbLoading.value = false;
-  }
-}
-
-async function submitScore() {
-  if (!won.value) return;
-
-  // compute final score (you already do this)
-  const score = finalScore.value;
-
-  // If embedded inside Illusion Arc, send SCORE to the host instead of using /api/submit of blink-maze
-  if (isEmbedded()) {
-    sendScoreToHost({
-      type: "SCORE",
-      score,
-      // optional extra data (won’t break your host listener)
-      gameSlug: "blink-maze",
-      meta: {
-        mode: mode.value,
-        seed: seedKey.value,
-        timeMs: finalTimeMs.value,
-        blinks: finalBlinks.value,
-        moves: finalMoves.value,
-        invalidMoves: finalInvalid.value,
-      }
-    });
-
-    toast("Submitted to Illusion Arc 🏆", "ok", 1200);
-    rankMsg.value = "Saved to Illusion Arc leaderboard ✅";
-    return;
-  }
-
-  // otherwise keep your existing standalone behaviour on vercel:
-  submitting.value = true;
-  rankMsg.value = "";
-  try {
-    const payload = {
-      mode: mode.value,
-      seed: seedKey.value,
-      name: playerName.value || "Guest",
-      timeMs: finalTimeMs.value,
-      blinks: finalBlinks.value,
-      moves: finalMoves.value,
-      invalidMoves: finalInvalid.value,
-    };
-
-    const res = await $fetch<{ ok: boolean; error?: string; score?: number; rank?: number }>(`/api/submit`, {
-      method: "POST",
-      body: payload,
-    });
-
-    if (res.ok) {
-      toast("Submitted!", "ok", 900);
-      if (typeof res.score === "number") finalScore.value = res.score;
-      if (typeof res.rank === "number") rankMsg.value = `🏆 You placed #${res.rank}`;
-      await loadLeaderboard();
-    } else {
-      toast(`Submit failed: ${res.error ?? "unknown"}`, "warn", 1200);
-    }
-  } catch {
-    toast("Submit failed (network/server).", "warn", 1200);
-  } finally {
-    submitting.value = false;
-  }
-}
-
-
-async function copyShareLink() {
-  writeQuery();
-  const link = new URL(window.location.href).toString();
-
-  try {
-    await navigator.clipboard.writeText(link);
-    toast("Link copied!", "ok", 900);
-  } catch {
-    toast("Copy failed. Use address bar.", "warn", 1200);
-  }
-}
-
-function isEmbedded() {
-  try { return window.self !== window.top } catch { return true }
-}
-
-function sendScoreToHost(payload: any) {
-  // send to wrapper (parent). Wrapper will relay to IllusionArc.
-  window.parent.postMessage(payload, "*")
-}
-
-
-// ======= Mode change =======
-watch(mode, async () => {
-  if (mode.value === "random") randomSeed.value = Math.floor(Math.random() * 1e9);
-  writeQuery();
-  generateMazeFromSeedKey(seedKey.value);
-  toast(`Mode: ${modeLabel.value}`, "info", 700);
-});
-
 // ======= Lifecycle =======
 let resizeObs: ResizeObserver | null = null;
 
@@ -850,9 +589,9 @@ onMounted(() => {
   isTouch.value = window.matchMedia?.("(pointer: coarse)").matches || "ontouchstart" in window;
   if (isTouch.value) hasFocus.value = true;
 
-  readQuery();
-  writeQuery();
-  generateMazeFromSeedKey(seedKey.value);
+  readSeedFromQuery();
+  writeSeedToQuery();
+  generateMazeFromSeed(randomSeed.value);
 
   resizeCanvas();
   requestAnimationFrame(() => resizeCanvas());
@@ -864,7 +603,7 @@ onMounted(() => {
   resizeObs = new ResizeObserver(() => resizeCanvas());
   if (root.value) resizeObs.observe(root.value);
 
-  // ✅ drives cooldown + time + UI updates
+  // drives cooldown + time + UI updates
   clockTimer = window.setInterval(() => {
     nowMs.value = Date.now();
   }, 100);
@@ -880,171 +619,99 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+/* root/canvas stay same */
 .root { position: relative; width: 100vw; height: 100dvh; outline: none; }
 .canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
-/* ===== Desktop HUD ===== */
-.hud {
-  position: absolute;
-  left: 14px; top: 14px;
-  padding: 12px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(16,22,40,0.74), rgba(10,14,26,0.66));
-  border: 1px solid rgba(120, 170, 255, 0.18);
-  box-shadow: 0 18px 60px rgba(0,0,0,0.35);
-  backdrop-filter: blur(12px);
-  color: rgba(234, 245, 255, 0.92);
-  max-width: min(540px, calc(100% - 28px));
-}
-
-.titleRow { display:flex; gap:10px; align-items:baseline; justify-content:space-between; flex-wrap:wrap; }
-.title { font-weight: 950; font-size: 16px; }
-.badge {
-  font-size: 11px; padding: 4px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(120,170,255,0.16);
-  background: rgba(255,255,255,0.06);
-  opacity: 0.9;
-}
-.hint { margin-top: 6px; font-size: 12px; opacity: 0.85; }
-
-.row { display:flex; gap:10px; margin-top:10px; flex-wrap:wrap; align-items:center; }
-.btn {
-  cursor:pointer;
-  border:1px solid rgba(140,180,255,0.18);
-  background: rgba(255,255,255,0.06);
-  color: rgba(240,250,255,0.95);
-  padding: 10px 12px;
-  border-radius: 14px;
-  font-weight: 900;
-}
-.btn:disabled { opacity: 0.55; cursor:not-allowed; }
-.btn.primary {
-  background: radial-gradient(120% 160% at 20% 10%, rgba(120,170,255,0.40), rgba(80,140,255,0.14));
-  border-color: rgba(120,170,255,0.28);
-}
-.sub { font-size:12px; margin-left:8px; opacity:0.85; font-weight:850; }
-
-.modeRow { gap: 8px; }
-.pill {
-  display:inline-flex; align-items:center; gap:8px;
-  padding: 8px 10px;
-  border-radius: 999px;
-  border: 1px solid rgba(140,180,255,0.14);
-  background: rgba(255,255,255,0.05);
-  font-size: 12px;
-  font-weight: 900;
-}
-.pill input { accent-color: #8fb9ff; }
-.name {
-  flex:1; min-width:160px;
-  border-radius:14px;
-  border:1px solid rgba(140,180,255,0.14);
-  background: rgba(0,0,0,0.18);
-  color: rgba(240,250,255,0.95);
-  padding: 10px 12px;
-  outline:none;
-}
-.name.wide { width: 100%; }
-
-.stats {
-  display:grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 10px;
-}
-.stat {
-  padding: 8px 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(140,180,255,0.10);
-  background: rgba(255,255,255,0.04);
-  font-size: 12px;
-  display:flex; align-items:baseline; justify-content:space-between; gap:10px;
-}
-.stat span { opacity:0.75; font-weight:800; }
-.stat b { font-weight:950; }
-.stat.score { border-color: rgba(255,230,120,0.16); }
-
-.toast {
-  margin-top: 10px;
-  font-size: 12px;
-  padding: 8px 10px;
-  border-radius: 14px;
-  border: 1px solid rgba(140,180,255,0.12);
-  background: rgba(255,255,255,0.06);
-}
-.toast.warn { border-color: rgba(255,180,120,0.25); background: rgba(255,180,120,0.08); }
-.toast.ok { border-color: rgba(90,255,160,0.25); background: rgba(90,255,160,0.08); }
-.startHint { margin-top: 10px; font-size: 12px; opacity: 0.86; }
-
-.winBox { margin-top:10px; padding:10px; border-radius:18px; background: rgba(90,255,160,0.08); border:1px solid rgba(90,255,160,0.18); }
-.winTitle { font-weight:950; margin-bottom:6px; }
-.winMeta { display:flex; gap:10px; flex-wrap:wrap; font-size:12px; opacity:0.95; margin-bottom:8px; }
-.rankBox { margin-top:10px; padding:8px 10px; border-radius:14px; background: rgba(255,220,120,0.10); border:1px solid rgba(255,220,120,0.18); font-size:12px; font-weight:950; }
-
-/* ===== Mobile HUD (compressed) ===== */
-.hudMobile {
-  position: absolute;
-  left: 10px; right: 10px; top: 10px;
-  padding: 10px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(16,22,40,0.74), rgba(10,14,26,0.62));
-  border: 1px solid rgba(120, 170, 255, 0.16);
-  box-shadow: 0 18px 60px rgba(0,0,0,0.28);
-  backdrop-filter: blur(12px);
-  color: rgba(234, 245, 255, 0.92);
-}
-
-.mTop { display:flex; justify-content:space-between; align-items:center; gap:10px; }
-.mTitle { font-weight: 950; font-size: 14px; }
-.mTags { display:flex; gap:6px; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
-.tag {
-  font-size: 10px;
-  padding: 3px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(120,170,255,0.14);
-  background: rgba(255,255,255,0.06);
-  opacity: 0.9;
-}
-
-.mActions { display:flex; gap:8px; margin-top:8px; align-items:center; }
-.mBtn2 {
-  height: 40px;
-  min-width: 40px;
-  padding: 0 10px;
+/* ===== Toggle always accessible ===== */
+.hudToggle{
+  position:absolute;
+  left: 10px;
+  top: calc(10px + env(safe-area-inset-top));
+  z-index: 40;
+  width: 44px;
+  height: 44px;
   border-radius: 14px;
   border: 1px solid rgba(140,180,255,0.18);
-  background: rgba(255,255,255,0.06);
+  background: rgba(12, 16, 30, 0.55);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.25);
   color: rgba(240,250,255,0.96);
   font-weight: 950;
-}
-.mBtn2.primary {
-  flex: 1;
-  min-width: 140px;
-  background: radial-gradient(120% 160% at 20% 10%, rgba(120,170,255,0.40), rgba(80,140,255,0.14));
-  border-color: rgba(120,170,255,0.28);
-}
-.mBtn2:disabled { opacity: 0.55; }
-
-.mStats { display:flex; gap:6px; margin-top:8px; flex-wrap:wrap; }
-.chip {
-  font-size: 11px;
-  padding: 5px 8px;
-  border-radius: 999px;
-  border: 1px solid rgba(140,180,255,0.10);
-  background: rgba(255,255,255,0.04);
-  opacity: 0.95;
+  cursor: pointer;
 }
 
-/* ===== Mobile Controls ===== */
-.mobileControls {
+/* ===== STATS OVERLAY: thin strip, pointer-events none so it doesn't block game ===== */
+.statsOverlay{
   position: absolute;
-  left: 50%;
-  bottom: 14px;
-  transform: translateX(-50%);
+  left: 0; right: 0;
+  top: calc(10px + env(safe-area-inset-top));
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  pointer-events: none; /* IMPORTANT */
+}
+.statsRow{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-width: min(820px, calc(100% - 120px));
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(10,14,26,0.28);
+  border: 1px solid rgba(120,170,255,0.10);
+  backdrop-filter: blur(10px);
+}
+.statPill{
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(140,180,255,0.10);
+  color: rgba(234,245,255,0.92);
+  font-weight: 900;
+  white-space: nowrap;
+}
+.statPill.dim{ opacity: 0.75; }
+
+/* ===== Toast centered, never inside controls ===== */
+.toastOverlay{
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(62px + env(safe-area-inset-top));
+  z-index: 45;
   display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.toast {
+  font-size: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(140,180,255,0.12);
+  background: rgba(16,22,40,0.82);
+  backdrop-filter: blur(10px);
+  color: rgba(234,245,255,0.92);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.35);
+}
+.toast.warn { border-color: rgba(255,180,120,0.25); background: rgba(55,30,12,0.75); }
+.toast.ok { border-color: rgba(90,255,160,0.25); background: rgba(12,40,22,0.75); }
+
+/* ===== Controls HUD (hideable) ===== */
+.controlsHud{
+  position: absolute;
+  z-index: 35;
+  display: flex;
   gap: 10px;
-  justify-items: center;
+  align-items: center;
+  pointer-events: auto;
+}
+
+/* desktop: small bar bottom-left (doesn't block maze center) */
+.controlsHud.desktop{
+  left: 14px;
+  bottom: 14px;
   padding: 10px;
   border-radius: 18px;
   background: rgba(12, 16, 30, 0.55);
@@ -1053,6 +720,49 @@ onBeforeUnmount(() => {
   box-shadow: 0 18px 60px rgba(0,0,0,0.25);
 }
 
+.cBtn{
+  cursor:pointer;
+  border:1px solid rgba(140,180,255,0.18);
+  background: rgba(255,255,255,0.06);
+  color: rgba(240,250,255,0.95);
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-weight: 950;
+}
+.cBtn:disabled { opacity: 0.55; cursor:not-allowed; }
+.cBtn.primary{
+  background: radial-gradient(120% 160% at 20% 10%, rgba(120,170,255,0.40), rgba(80,140,255,0.14));
+  border-color: rgba(120,170,255,0.28);
+}
+.sub { font-size:12px; margin-left:8px; opacity:0.85; font-weight:850; }
+
+/* mobile: bottom controls only */
+.controlsHud.mobile{
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(12, 16, 30, 0.55);
+  border: 1px solid rgba(120,170,255,0.14);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.25);
+}
+
+.mMini{
+  align-self: flex-end;
+  width: 54px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(140, 180, 255, 0.20);
+  background: rgba(255,255,255,0.06);
+  color: rgba(240, 250, 255, 0.96);
+  font-weight: 950;
+}
+
+.pad{ display: grid; gap: 10px; justify-items: center; }
 .mRow { display:flex; gap:10px; align-items:center; }
 .mBtn {
   width: 64px;
@@ -1070,64 +780,7 @@ onBeforeUnmount(() => {
   border-color: rgba(255, 230, 120, 0.20);
 }
 
-/* ===== Modals ===== */
-.modalOverlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.55);
-  display: grid;
-  place-items: center;
-  padding: 16px;
-}
-.modal {
-  width: min(520px, 100%);
-  max-height: min(70vh, 600px);
-  overflow: auto;
-  border-radius: 18px;
-  background: linear-gradient(180deg, rgba(16,22,40,0.96), rgba(10,14,26,0.94));
-  border: 1px solid rgba(120,170,255,0.16);
-  box-shadow: 0 22px 70px rgba(0,0,0,0.55);
-  color: rgba(234,245,255,0.92);
-  padding: 12px;
-}
-.modalHead { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
-.modalTitle { font-weight: 950; font-size: 14px; }
-.modalSub { font-size: 11px; opacity: 0.8; margin-top: 2px; }
-.xBtn {
-  border: 1px solid rgba(140,180,255,0.16);
-  background: rgba(255,255,255,0.06);
-  color: rgba(234,245,255,0.92);
-  border-radius: 12px;
-  width: 40px;
-  height: 40px;
-  font-weight: 950;
-}
-
-.lbLoading { margin-top: 10px; font-size: 12px; opacity: 0.85; }
-.lbList { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 6px; }
-.lbRow {
-  display:grid;
-  grid-template-columns: 44px 1fr auto auto;
-  gap: 8px;
-  align-items:center;
-  font-size: 12px;
-  padding: 9px 10px;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(140,180,255,0.10);
-}
-.rank { opacity: 0.75; font-weight: 900; }
-.nameRow { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.scoreRow { font-weight: 950; }
-.small { opacity: 0.75; }
-.lbEmpty { font-size: 12px; opacity: 0.75; padding: 8px 10px; }
-
-.settingsBlock { margin-top: 12px; display: grid; gap: 10px; }
-.settingsRow { display:flex; gap:8px; flex-wrap:wrap; }
-.wide { width: 100%; }
-.btn.wide { width: 100%; }
-
-/* desktop focus overlay */
+/* focus overlay stays */
 .focusOverlay {
   position: absolute;
   inset: 0;
@@ -1137,7 +790,139 @@ onBeforeUnmount(() => {
   background: rgba(0,0,0,0.20);
   font-weight: 900;
 }
+/* ===== STATS OVERLAY ===== */
+.statsOverlay{
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(10px + env(safe-area-inset-top));
+  z-index: 20;
+  display: flex;
+  justify-content: center;
+  pointer-events: none;
+}
+.statsRow{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 8px 10px;
+  border-radius: 999px;
+  background: rgba(10,14,26,0.28);
+  border: 1px solid rgba(120,170,255,0.10);
+  backdrop-filter: blur(10px);
+}
+.statPill{
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(140,180,255,0.10);
+  color: rgba(234,245,255,0.92);
+  font-weight: 900;
+  white-space: nowrap;
+}
 
-/* fade UI during blink on mobile */
-.peek { opacity: 0.08; pointer-events: none; backdrop-filter: none; }
+/* ===== TOAST ===== */
+.toastOverlay{
+  position: absolute;
+  left: 0; right: 0;
+  top: calc(62px + env(safe-area-inset-top));
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+}
+.toast {
+  font-size: 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(140,180,255,0.12);
+  background: rgba(16,22,40,0.82);
+  backdrop-filter: blur(10px);
+  color: rgba(234,245,255,0.92);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.35);
+}
+.toast.warn { border-color: rgba(255,180,120,0.25); background: rgba(55,30,12,0.75); }
+.toast.ok { border-color: rgba(90,255,160,0.25); background: rgba(12,40,22,0.75); }
+
+/* ===== CONTROLS HUD ===== */
+.controlsHud{
+  position: absolute;
+  z-index: 35;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+/* desktop bottom-left */
+.controlsHud.desktop{
+  left: 14px;
+  bottom: 14px;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(12, 16, 30, 0.55);
+  border: 1px solid rgba(120,170,255,0.14);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.25);
+}
+
+.cBtn{
+  cursor:pointer;
+  border:1px solid rgba(140,180,255,0.18);
+  background: rgba(255,255,255,0.06);
+  color: rgba(240,250,255,0.95);
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-weight: 950;
+}
+.cBtn:disabled { opacity: 0.55; cursor:not-allowed; }
+.cBtn.primary{
+  background: radial-gradient(120% 160% at 20% 10%, rgba(120,170,255,0.40), rgba(80,140,255,0.14));
+  border-color: rgba(120,170,255,0.28);
+}
+.sub { font-size:12px; margin-left:8px; opacity:0.85; font-weight:850; }
+
+/* mobile bottom center D-pad */
+.controlsHud.mobile{
+  left: 50%;
+  bottom: 14px;
+  transform: translateX(-50%);
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 18px;
+  background: rgba(12, 16, 30, 0.55);
+  border: 1px solid rgba(120,170,255,0.14);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 18px 60px rgba(0,0,0,0.25);
+}
+
+.mMini{
+  align-self: flex-end;
+  width: 54px;
+  height: 38px;
+  border-radius: 14px;
+  border: 1px solid rgba(140, 180, 255, 0.20);
+  background: rgba(255,255,255,0.06);
+  color: rgba(240, 250, 255, 0.96);
+  font-weight: 950;
+}
+
+.pad{ display: grid; gap: 10px; justify-items: center; }
+.mRow { display:flex; gap:10px; align-items:center; }
+.mBtn {
+  width: 64px;
+  height: 46px;
+  border-radius: 16px;
+  border: 1px solid rgba(140, 180, 255, 0.20);
+  background: rgba(255,255,255,0.06);
+  color: rgba(240, 250, 255, 0.96);
+  font-weight: 950;
+  font-size: 16px;
+}
+.mBtn.blink {
+  width: 94px;
+  background: rgba(255, 230, 120, 0.10);
+  border-color: rgba(255, 230, 120, 0.20);
+}
 </style>
